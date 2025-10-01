@@ -71,3 +71,4 @@ def _get_weather_icon(condition: str) -> str:
     }
     return icons.get(condition, '🌤️')
 
+

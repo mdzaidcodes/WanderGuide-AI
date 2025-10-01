@@ -126,8 +126,37 @@ export default function TripPlanner() {
   }
 
   if (step === 4 && results) {
+    const handleContinueToAssistant = () => {
+      // Store data in localStorage
+      localStorage.setItem('currentItinerary', JSON.stringify(results.itinerary))
+      localStorage.setItem('currentTripData', JSON.stringify(tripData))
+      
+      // Navigate to trip assistant page
+      window.location.href = '/trip-assistant'
+    }
+
     return (
       <div className="space-y-8">
+        {/* Call to Action Button */}
+        <div className="card bg-gradient-to-r from-green-50 to-green-100 border-2 border-green-300">
+          <div className="flex flex-col md:flex-row items-center justify-between gap-4">
+            <div>
+              <h3 className="text-xl font-bold text-green-800 mb-1">
+                🎉 Your Trip Plan is Ready!
+              </h3>
+              <p className="text-green-700">
+                Continue to your personal trip assistant to chat about your trip, make changes, and get recommendations.
+              </p>
+            </div>
+            <button
+              onClick={handleContinueToAssistant}
+              className="btn-primary whitespace-nowrap px-8 py-3 text-lg bg-gradient-to-r from-primary-600 to-secondary-600 hover:from-primary-700 hover:to-secondary-700"
+            >
+              Continue to Trip Assistant →
+            </button>
+          </div>
+        </div>
+
         <ItineraryDisplay itinerary={results.itinerary} cultural={results.cultural} />
         <FlightResults flights={results.flights} />
         <HotelResults hotels={results.hotels} />

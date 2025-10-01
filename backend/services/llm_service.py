@@ -194,6 +194,156 @@ class LLMService:
             print(f"Error generating cultural insights: {str(e)}")
             return {}
     
+    def chat_with_assistant(self, message: str, trip_context: Dict, current_itinerary: Dict, conversation_history: List[Dict]) -> Dict:
+        """
+        Chat with AI assistant about the trip
+        
+        Args:
+            message: User's message
+            trip_context: Context about the trip (destination, dates, etc.)
+            current_itinerary: Current itinerary state
+            conversation_history: Previous conversation messages
+        
+        Returns:
+            Dictionary with response and optional itinerary updates
+        """
+        
+        # Build conversation context
+        history_text = "\n".join([
+            f"{msg.get('role', 'user')}: {msg.get('content', '')}"
+            for msg in conversation_history[-5:]  # Last 5 messages
+        ])
+        
+        prompt = PromptTemplate(
+            input_variables=["message", "destination", "itinerary", "history"],
+            template="""
+            You are a helpful AI travel assistant for a trip to {destination}.
+            
+            Current Itinerary Summary:
+            {itinerary}
+            
+            Previous conversation:
+            {history}
+            
+            User's question: {message}
+            
+            Provide a helpful, conversational response. If the user wants to modify the itinerary (add, remove, or change activities), respond with:
+            1. A friendly acknowledgment and explanation
+            2. A JSON object with the updated itinerary in this EXACT format at the end:
+            
+            ITINERARY_UPDATE:
+            {{
+                "itinerary": [
+                    {{
+                        "day": 1,
+                        "title": "Day title",
+                        "morning": "Activity description",
+                        "afternoon": "Activity description",
+                        "evening": "Activity description",
+                        "estimated_cost": 150,
+                        "tips": "Tips"
+                    }}
+                ],
+                "overview": "Trip overview",
+                "total_estimated_cost": 1500,
+                "packing_suggestions": ["item1", "item2"],
+                "cultural_tips": ["tip1", "tip2"]
+            }}
+            
+            If no itinerary modification is needed, just provide a helpful conversational response.
+            Be specific, friendly, and knowledgeable about travel.
+            """
+        )
+        
+        try:
+            if self.llm is None:
+                return self._generate_fallback_chat_response(message, trip_context, current_itinerary)
+            
+            chain = LLMChain(llm=self.llm, prompt=prompt)
+            
+            # Prepare itinerary summary
+            itinerary_summary = self._summarize_itinerary(current_itinerary)
+            
+            result = chain.run(
+                message=message,
+                destination=trip_context.get('destination', 'your destination'),
+                itinerary=itinerary_summary,
+                history=history_text
+            )
+            
+            # Check if response contains itinerary update
+            itinerary_update = None
+            response_text = result
+            
+            if "ITINERARY_UPDATE:" in result:
+                parts = result.split("ITINERARY_UPDATE:")
+                response_text = parts[0].strip()
+                
+                # Parse JSON update
+                import json
+                try:
+                    json_str = parts[1].strip()
+                    start_idx = json_str.find('{')
+                    end_idx = json_str.rfind('}') + 1
+                    if start_idx != -1 and end_idx > start_idx:
+                        itinerary_update = json.loads(json_str[start_idx:end_idx])
+                except Exception as e:
+                    print(f"Error parsing itinerary update: {e}")
+            
+            return {
+                'response': response_text,
+                'itinerary_update': itinerary_update
+            }
+            
+        except Exception as e:
+            print(f"Error in chat assistant: {str(e)}")
+            return self._generate_fallback_chat_response(message, trip_context, current_itinerary)
+    
+    def _summarize_itinerary(self, itinerary: Dict) -> str:
+        """Create a brief summary of the itinerary for context"""
+        if not itinerary or 'itinerary' not in itinerary:
+            return "No itinerary available yet."
+        
+        summary_lines = []
+        for day in itinerary.get('itinerary', []):
+            summary_lines.append(
+                f"Day {day.get('day')}: {day.get('title')} - "
+                f"Morning: {day.get('morning', '')[:50]}..., "
+                f"Afternoon: {day.get('afternoon', '')[:50]}..., "
+                f"Evening: {day.get('evening', '')[:50]}..."
+            )
+        
+        return "\n".join(summary_lines)
+    
+    def _generate_fallback_chat_response(self, message: str, trip_context: Dict, current_itinerary: Dict) -> Dict:
+        """Generate fallback response when LLM is unavailable"""
+        message_lower = message.lower()
+        destination = trip_context.get('destination', 'your destination')
+        
+        # Simple pattern matching for common queries
+        if any(word in message_lower for word in ['restaurant', 'food', 'eat', 'dining']):
+            response = f"I'd be happy to help with restaurant recommendations in {destination}! Based on local cuisine and popular spots, I suggest trying local specialties and asking your hotel for current recommendations. Would you like me to suggest specific areas or types of cuisine?"
+        
+        elif any(word in message_lower for word in ['add', 'include', 'visit']):
+            response = f"I understand you'd like to add something to your itinerary. While I'm currently unable to modify the itinerary automatically, I recommend considering the timing and location when adding new activities. What specific activity would you like to add and on which day?"
+        
+        elif any(word in message_lower for word in ['remove', 'cancel', 'delete', 'skip']):
+            response = f"I can help you adjust your plans. Which day and activity would you like to remove? This will free up time for other experiences or simply allow for more flexibility."
+        
+        elif any(word in message_lower for word in ['weather', 'temperature', 'climate']):
+            response = f"For up-to-date weather information in {destination}, I recommend checking a weather service. Generally, it's good to pack layers and be prepared for changes. Would you like suggestions on what to pack?"
+        
+        elif any(word in message_lower for word in ['budget', 'cost', 'expensive', 'cheap', 'price']):
+            response = f"I can help you optimize your budget. The current itinerary estimates ${current_itinerary.get('total_estimated_cost', 'N/A')} total. Would you like suggestions for budget-friendly alternatives?"
+        
+        else:
+            response = f"I'm here to help with your trip to {destination}! I can assist with restaurant recommendations, activity suggestions, itinerary modifications, local tips, and budget planning. What would you like to know more about?"
+        
+        return {
+            'response': response,
+            'itinerary_update': None
+        }
+    
     def optimize_budget(self, itinerary: Dict, target_budget: float) -> Dict:
         """
         Optimize itinerary to fit within budget constraints

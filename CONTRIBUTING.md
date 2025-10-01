@@ -185,3 +185,4 @@ Contributors will be added to the README.md acknowledgments section.
 
 Thank you for contributing to WanderGuide AI! 🌍✈️
 
+

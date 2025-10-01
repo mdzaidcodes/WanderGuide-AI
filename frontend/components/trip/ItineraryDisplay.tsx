@@ -254,3 +254,4 @@ export default function ItineraryDisplay({ itinerary, cultural }: ItineraryDispl
   )
 }
 
+

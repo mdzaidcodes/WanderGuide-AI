@@ -104,3 +104,54 @@ def get_cultural_insights():
     except Exception as e:
         return jsonify({'error': str(e)}), 500
 
+
+@itinerary_bp.route('/chat', methods=['POST'])
+def chat_assistant():
+    """
+    Chat with the AI travel assistant about the trip
+    
+    Expected JSON body:
+    {
+        "message": "Can you add a museum visit to day 2?",
+        "trip_context": {...},
+        "current_itinerary": {...},
+        "conversation_history": [...]
+    }
+    """
+    try:
+        data = request.get_json()
+        print(f"📨 Received chat request: {data.get('message', 'No message')[:50]}...")
+        
+        if 'message' not in data:
+            return jsonify({'error': 'Message is required'}), 400
+        
+        message = data['message']
+        trip_context = data.get('trip_context', {})
+        current_itinerary = data.get('current_itinerary', {})
+        conversation_history = data.get('conversation_history', [])
+        
+        print(f"🤖 Processing chat with context: {trip_context.get('destination', 'Unknown')}")
+        
+        # Use LLM to generate response and potentially update itinerary
+        response = llm_service.chat_with_assistant(
+            message=message,
+            trip_context=trip_context,
+            current_itinerary=current_itinerary,
+            conversation_history=conversation_history
+        )
+        
+        print(f"✅ Chat response generated successfully")
+        
+        return jsonify({
+            'success': True,
+            'response': response['response'],
+            'itinerary_update': response.get('itinerary_update')
+        }), 200
+        
+    except Exception as e:
+        print(f"❌ Error in chat endpoint: {str(e)}")
+        import traceback
+        traceback.print_exc()
+        return jsonify({'error': str(e)}), 500
+
+

@@ -340,3 +340,4 @@ class ScraperService:
         
         return random.sample(highlights, min(3, len(highlights)))
 
+
